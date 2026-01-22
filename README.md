@@ -21,7 +21,7 @@ Available addons
 ----------------
 addon | version | maintainers | summary
 --- | --- | --- | ---
-[base_geoengine](base_geoengine/) | 18.0.1.0.1 |  | Geospatial support for Odoo
+[base_geoengine](base_geoengine/) | 18.0.1.1.0 |  | Geospatial support for Odoo
 [web_leaflet_draw_lib](web_leaflet_draw_lib/) | 18.0.1.0.0 | <a href='https://github.com/NL66278''><img src='https://github.com/NL66278'.png' width='32' height='32' style='border-radius:50%;' alt='NL66278''/></a> | Bring leaflet.draw.js library in odoo.
 [web_leaflet_lib](web_leaflet_lib/) | 18.0.1.1.0 | <a href='https://github.com/legalsylvain'><img src='https://github.com/legalsylvain.png' width='32' height='32' style='border-radius:50%;' alt='legalsylvain'/></a> | Bring leaflet.js librairy in odoo.
 [web_view_leaflet_map](web_view_leaflet_map/) | 18.0.1.1.1 | <a href='https://github.com/legalsylvain'><img src='https://github.com/legalsylvain.png' width='32' height='32' style='border-radius:50%;' alt='legalsylvain'/></a> | Add new 'leaflet_map' view, to display markers.
