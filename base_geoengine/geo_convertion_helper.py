@@ -14,6 +14,16 @@ except ImportError:
     logger.warning(_("Shapely or geojson are not available in the sys path"))
 
 
+def _looks_like_wkb_hex(value):
+    if len(value) < 2 or len(value) % 2:
+        return False
+    try:
+        int(value, 16)
+    except ValueError:
+        return False
+    return value[:2] in ("00", "01")
+
+
 def value_to_shape(value, use_wkb=False):
     """Transforms input into a Shapely object"""
     if not value:
@@ -24,7 +34,7 @@ def value_to_shape(value, use_wkb=False):
         if "{" in value:
             geo_dict = geojson.loads(value)
             return shape(geo_dict)
-        elif use_wkb:
+        elif use_wkb or _looks_like_wkb_hex(value):
             return wkb.loads(value, hex=True)
         else:
             return wkt.loads(value)

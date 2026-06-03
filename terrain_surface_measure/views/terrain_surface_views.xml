@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="terrain_surface_view_tree" model="ir.ui.view">
+        <field name="name">terrain.surface.list</field>
+        <field name="model">terrain.surface</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name" />
+                <field name="surface_m2" />
+                <field name="surface_hectare" />
+            </list>
+        </field>
+    </record>
+
+    <record id="terrain_surface_view_form" model="ir.ui.view">
+        <field name="name">terrain.surface.form</field>
+        <field name="model">terrain.surface</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="name" />
+                    </group>
+                    <group>
+                        <field name="surface_m2" />
+                        <field name="surface_hectare" />
+                    </group>
+                    <notebook>
+                        <page string="Border">
+                            <field
+                                name="border"
+                                options="{'opacity': 0.35, 'color': '#2E7D32'}"
+                            />
+                        </page>
+                        <page string="Notes">
+                            <field name="note" />
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="terrain_surface_view_geoengine" model="ir.ui.view">
+        <field name="name">terrain.surface.geoengine</field>
+        <field name="model">terrain.surface</field>
+        <field name="type">geoengine</field>
+        <field name="default_zoom">16</field>
+        <field name="default_extent">-975000,2150000,1350000,4450000</field>
+        <field name="arch" type="xml">
+            <geoengine editable="1">
+                <field name="name" />
+                <field name="border" />
+                <field name="surface_m2" />
+                <field name="surface_hectare" />
+                <templates>
+                    <t t-name="info_box">
+                        <ul>
+                            <li>Name: <field name="name" /></li>
+                            <li>Surface m²: <field name="surface_m2" /></li>
+                            <li>Surface ha: <field name="surface_hectare" /></li>
+                        </ul>
+                    </t>
+                </templates>
+            </geoengine>
+        </field>
+    </record>
+
+    <record id="terrain_surface_raster_osm" model="geoengine.raster.layer">
+        <field name="name">OpenStreetMap</field>
+        <field name="view_id" ref="terrain_surface_view_geoengine" />
+        <field name="raster_type">osm</field>
+        <field name="sequence">1</field>
+        <field name="opacity">1.0</field>
+    </record>
+
+    <record id="terrain_surface_raster_satellite" model="geoengine.raster.layer">
+        <field name="name">Satellite</field>
+        <field name="view_id" ref="terrain_surface_view_geoengine" />
+        <field name="raster_type">arcgis_xyz</field>
+        <field name="url">https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}</field>
+        <field name="sequence">2</field>
+        <field name="overlay" eval="1" />
+        <field name="opacity">1.0</field>
+    </record>
+
+    <record id="terrain_surface_vector_border" model="geoengine.vector.layer">
+        <field name="name">Terrain Borders</field>
+        <field name="view_id" ref="terrain_surface_view_geoengine" />
+        <field name="geo_field_id" ref="field_terrain_surface__border" />
+        <field name="attribute_field_id" ref="field_terrain_surface__name" />
+        <field name="geo_repr">basic</field>
+        <field name="begin_color">#2E7D32</field>
+        <field name="layer_opacity">0.35</field>
+        <field name="active_on_startup" eval="1" />
+        <field name="display_polygon_labels" eval="1" />
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="terrain_surface_action" model="ir.actions.act_window">
+        <field name="name">Terrain Surfaces</field>
+        <field name="res_model">terrain.surface</field>
+        <field name="view_mode">geoengine,list,form</field>
+        <field name="view_id" ref="terrain_surface_view_geoengine" />
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Draw a terrain border</p>
+        </field>
+    </record>
+
+    <menuitem
+        id="terrain_surface_menu_root"
+        name="Terrain Measure"
+        sequence="30"
+        web_icon="base_geoengine,images/map.png"
+    />
+    <menuitem
+        id="terrain_surface_menu"
+        name="Terrain Surfaces"
+        parent="terrain_surface_menu_root"
+        action="terrain_surface_action"
+        sequence="10"
+    />
+</odoo>

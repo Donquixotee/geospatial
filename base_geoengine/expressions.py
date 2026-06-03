@@ -4,15 +4,12 @@
 import random
 import string
 
-from odoo.models import BaseModel
-from odoo.osv import expression
-from odoo.osv.expression import TERM_OPERATORS
 from odoo.tools import SQL, Query
+from odoo.orm import domains
+from odoo.orm.utils import SQL_OPERATORS
 
 from .fields import GeoField
 from .geo_operators import GeoOperator
-
-original___condition_to_sql = BaseModel._condition_to_sql
 
 GEO_OPERATORS = {
     "geo_greater": ">",
@@ -32,82 +29,85 @@ GEO_SQL_OPERATORS = {
     "geo_contains": SQL("ST_Contains"),
     "geo_intersect": SQL("ST_Intersects"),
 }
-term_operators_list = list(TERM_OPERATORS)
-for op in GEO_OPERATORS:
-    term_operators_list.append(op)
-
-expression.TERM_OPERATORS = tuple(term_operators_list)
-expression.SQL_OPERATORS.update(GEO_SQL_OPERATORS)
+SQL_OPERATORS.update(GEO_SQL_OPERATORS)
+domains.CONDITION_OPERATORS.update(GEO_OPERATORS)
+domains.STANDARD_CONDITION_OPERATORS = domains.STANDARD_CONDITION_OPERATORS | set(
+    GEO_OPERATORS
+)
 
 
 def _condition_to_sql(
-    self, alias: str, fname: str, operator: str, value, query: Query
+    self, field_expr: str, operator: str, value, model, alias: str, query: Query
 ) -> SQL:
     """
-    This method has been monkey patched in order to be able to include
-    geo_operators into the Odoo search method.
+    This method has been monkey patched on GeoField in order to be able to
+    include geo_operators into the Odoo search method.
     """
     if operator in GEO_OPERATORS.keys():
-        current_field = self._fields.get(fname)
-        current_operator = GeoOperator(current_field)
-        if current_field and isinstance(current_field, GeoField):
-            params = []
-            if isinstance(value, dict):
-                # We are having indirect geo_operator like (‘geom’, ‘geo_...’,
-                # {‘res.zip.poly’: [‘id’, ‘in’, [1,2,3]] })
-                ref_search = value
-                sub_queries = []
-                for key in ref_search:
-                    i = key.rfind(".")
-                    rel_model = key[0:i]
-                    rel_col = key[i + 1 :]
-                    rel_model = self.env[rel_model]
-                    # we compute the attributes search on spatial rel
-                    if ref_search[key]:
-                        rel_alias = (
-                            rel_model._table
-                            + "_"
-                            + "".join(random.choices(string.ascii_lowercase, k=5))
+        current_operator = GeoOperator(self)
+        params = []
+        if isinstance(value, dict):
+            # We are having indirect geo_operator like ('geom', 'geo_...',
+            # {'res.zip.poly': [('id', 'in', [1, 2, 3])]})
+            ref_search = value
+            sub_queries = []
+            for key in ref_search:
+                i = key.rfind(".")
+                rel_model_name = key[0:i]
+                rel_col = key[i + 1 :]
+                rel_model = model.env[rel_model_name]
+                # we compute the attributes search on spatial rel
+                if ref_search[key]:
+                    rel_alias = (
+                        rel_model._table
+                        + "_"
+                        + "".join(random.choices(string.ascii_lowercase, k=5))
+                    )
+                    rel_query = where_calc(
+                        rel_model,
+                        ref_search[key],
+                        active_test=True,
+                        alias=rel_alias,
+                    )
+                    rel_model._apply_ir_rules(rel_query, "read")
+                    if operator == "geo_equal":
+                        rel_query.add_where(
+                            SQL(
+                                "%s %s %s",
+                                model._field_to_sql(alias, field_expr, query),
+                                GEO_SQL_OPERATORS[operator],
+                                SQL.identifier(rel_alias, rel_col),
+                            )
                         )
-                        rel_query = where_calc(
-                            rel_model,
-                            ref_search[key],
-                            active_test=True,
-                            alias=rel_alias,
+                    elif operator in ("geo_greater", "geo_lesser"):
+                        rel_query.add_where(
+                            SQL(
+                                "ST_Area(%s) %s ST_Area(%s)",
+                                model._field_to_sql(alias, field_expr, query),
+                                GEO_SQL_OPERATORS[operator],
+                                SQL.identifier(rel_alias, rel_col),
+                            )
                         )
-                        self._apply_ir_rules(rel_query, "read")
-                        if operator == "geo_equal":
-                            rel_query.add_where(
-                                f'"{alias}"."{fname}" {GEO_OPERATORS[operator]} '
-                                f"{rel_alias}.{rel_col}"
+                    else:
+                        rel_query.add_where(
+                            SQL(
+                                "%s(%s, %s)",
+                                GEO_SQL_OPERATORS[operator],
+                                model._field_to_sql(alias, field_expr, query),
+                                SQL.identifier(rel_alias, rel_col),
                             )
-                        elif operator in ("geo_greater", "geo_lesser"):
-                            rel_query.add_where(
-                                f"ST_Area({alias}.{fname}) {GEO_OPERATORS[operator]} "
-                                f"ST_Area({rel_alias}.{rel_col})"
-                            )
-                        else:
-                            rel_query.add_where(
-                                f'{GEO_OPERATORS[operator]}("{alias}"."{fname}", '
-                                f"{rel_alias}.{rel_col})"
-                            )
+                        )
 
-                        subquery, subparams = rel_query.subselect("1")
-                        sub_query_mogrified = (
-                            self.env.cr.mogrify(subquery, subparams)
-                            .decode("utf-8")
-                            .replace(f"'{rel_model._table}'", f'"{rel_model._table}"')
-                            .replace("%", "%%")
-                        )
-                        sub_queries.append(f"EXISTS({sub_query_mogrified})")
-                query = " AND ".join(sub_queries)
-            else:
-                query = get_geo_func(
-                    current_operator, operator, fname, value, params, self._table
-                )
-            return SQL(query, *params)
-    return original___condition_to_sql(
-        self, alias=alias, fname=fname, operator=operator, value=value, query=query
+                    sub_queries.append(SQL("EXISTS (%s)", rel_query.subselect("1")))
+            sql = SQL(" AND ").join(sub_queries)
+        else:
+            sql = get_geo_func(
+                current_operator, operator, field_expr, value, params, alias
+            )
+            return SQL(sql, *params)
+        return sql
+    return super(GeoField, self).condition_to_sql(
+        field_expr, operator, value, model, alias, query
     )
 
 
@@ -137,20 +137,26 @@ def get_geo_func(current_operator, operator, left, value, params, table):
 
 def where_calc(model, domain, active_test=True, alias=None):
     """
-    This method is copied from base, we need to create our own query.
+    This method mirrors Odoo's native _search domain-to-query path while
+    allowing callers to force a table alias for indirect geo operators.
     """
-    # if the object has an active field ('active', 'x_active'), filter out all
-    # inactive records unless they were explicitly asked for
-    if model._active_name and active_test and model._context.get("active_test", True):
-        # the item[0] trick below works for domain items and '&'/'|'/'!'
-        # operators too
-        if not any(item[0] == model._active_name for item in domain):
-            domain = [(model._active_name, "=", 1)] + domain
+    domain = domains.Domain(domain)
+    if (
+        model._active_name
+        and active_test
+        and model.env.context.get("active_test", True)
+        and not any(
+            condition.field_expr == model._active_name
+            for condition in domain.iter_conditions()
+        )
+    ):
+        domain &= domains.Domain(model._active_name, "=", True)
 
-    query = Query(model.env, alias, model._table)
-    if domain:
-        return expression.expression(domain, model, alias=alias, query=query).query
+    table_alias = alias or model._table
+    query = Query(model.env, table_alias, model._table)
+    domain = domain.optimize_full(model)
+    if not domain.is_true():
+        query.add_where(domain._to_sql(model, table_alias, query))
     return query
 
-
-BaseModel._condition_to_sql = _condition_to_sql
+GeoField.condition_to_sql = _condition_to_sql

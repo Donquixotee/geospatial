@@ -19,6 +19,8 @@ export class FieldGeoEngineEditMap extends Component {
         // Allows you to have a unique id if you put the same field in the view several times
         this.id = `map_${this.props.id}`;
         this.orm = useService("orm");
+        this.keepCurrentViewOnNextValue = false;
+        this.hasAutoFitValue = false;
 
         onWillStart(() =>
             Promise.all([
@@ -146,9 +148,15 @@ export class FieldGeoEngineEditMap extends Component {
             this.source.addFeature(ft);
 
             if (value) {
-                this.updateMapZoom();
+                if (this.keepCurrentViewOnNextValue) {
+                    this.keepCurrentViewOnNextValue = false;
+                } else if (!this.hasAutoFitValue) {
+                    this.updateMapZoom();
+                    this.hasAutoFitValue = true;
+                }
             } else {
                 this.updateMapEmpty();
+                this.hasAutoFitValue = false;
             }
         }
     }
@@ -163,6 +171,7 @@ export class FieldGeoEngineEditMap extends Component {
         if (geometry) {
             value = this.format.writeGeometry(geometry);
         }
+        this.keepCurrentViewOnNextValue = true;
         this.props.record.update({[this.props.name]: value});
     }
 
