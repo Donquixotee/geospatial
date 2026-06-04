@@ -61,6 +61,15 @@ export class RecordsPanel extends Component {
         this.state.records = val;
     }
 
+    getRecordLabel(record) {
+        return (
+            record.data?.display_name ||
+            record.data?.name ||
+            record.resId ||
+            ""
+        ).toString();
+    }
+
     /**
      * This method allows you to filter items according to the value passed in parameter.
      * @param {*} value
@@ -68,10 +77,10 @@ export class RecordsPanel extends Component {
      * @returns {*}
      */
     filterItems(value, items) {
-        const lowerValue = value.toLowerCase();
-        return items.filter(
-            (item) => item.data.display_name.toLowerCase().indexOf(lowerValue) >= 0
-        );
+        const lowerValue = (value || "").toString().toLowerCase();
+        return items.filter((item) => {
+            return this.getRecordLabel(item).toLowerCase().indexOf(lowerValue) >= 0;
+        });
     }
 }
 
